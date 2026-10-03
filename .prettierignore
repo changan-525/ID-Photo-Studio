@@ -1,0 +1,9 @@
+node_modules
+dist
+public/wasm
+public/licenses
+public/THIRD_PARTY_NOTICES.md
+test-results
+playwright-report
+package-lock.json
+*.tsbuildinfo
