@@ -34,7 +34,9 @@ import {
   decodePhoto,
   exportCanvas,
   getPixelSize,
+  getSourceQualitySize,
   renderPhoto,
+  type ExportResolution,
   type Transform,
 } from './lib/photo';
 
@@ -67,7 +69,7 @@ function App() {
   const [presetId, setPresetId] = useState(PRESETS[0].id);
   const [customWidth, setCustomWidth] = useState('25');
   const [customHeight, setCustomHeight] = useState('35');
-  const [dpi, setDpi] = useState(300);
+  const [resolution, setResolution] = useState<ExportResolution>('original');
   const [color, setColor] = useState('#438edb');
   const [customColor, setCustomColor] = useState('#91a8a0');
   const [transform, setTransform] = useState<Transform>(INITIAL);
@@ -96,7 +98,13 @@ function App() {
     widthMm <= 100 &&
     heightMm >= 10 &&
     heightMm <= 100;
-  const pixels = validSize ? getPixelSize(widthMm, heightMm, dpi) : { width: 0, height: 0 };
+  const output =
+    validSize && source
+      ? resolution === 'original'
+        ? getSourceQualitySize(source.width, source.height, widthMm, heightMm, transform.zoom)
+        : { ...getPixelSize(widthMm, heightMm, resolution), dpi: resolution }
+      : { width: 0, height: 0, dpi: resolution === 'original' ? 0 : resolution };
+  const pixels = { width: output.width, height: output.height };
   const colorLabel = COLORS.find((item) => item.value === color)?.name ?? '自定义';
 
   useEffect(() => {
@@ -210,19 +218,30 @@ function App() {
     setExporting(true);
     setError('');
     try {
-      let canvas = renderPhoto(source, { ...pixels, background: color, transform });
+      const exportDpi = output.dpi;
+      const sheetDpi = Math.min(exportDpi, 600);
+      const exportPixels = sheet ? getPixelSize(widthMm, heightMm, sheetDpi) : pixels;
+      let canvas = renderPhoto(source, { ...exportPixels, background: color, transform });
       let count = 1;
       if (sheet) {
-        const result = createPrintSheet(canvas, dpi);
+        const result = createPrintSheet(canvas, sheetDpi);
         canvas = result.canvas;
         count = result.count;
       }
       if (sheet && count === 0) throw new Error('当前尺寸放不进六寸相纸，请缩小照片尺寸后重试。');
-      const blob = await exportCanvas(canvas, sheet ? 'jpeg' : format, dpi);
+      const blob = await exportCanvas(
+        canvas,
+        sheet ? 'jpeg' : format,
+        sheet ? sheetDpi : exportDpi,
+      );
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
-      anchor.download = `id-photo-${widthMm}x${heightMm}mm-${dpi}dpi${sheet ? '-sheet' : ''}.${sheet || format === 'jpeg' ? 'jpg' : 'png'}`;
+      const qualityLabel =
+        resolution === 'original' && !sheet
+          ? `original-${exportDpi}dpi`
+          : `${sheet ? sheetDpi : exportDpi}dpi`;
+      anchor.download = `id-photo-${widthMm}x${heightMm}mm-${qualityLabel}${sheet ? '-sheet' : ''}.${sheet || format === 'jpeg' ? 'jpg' : 'png'}`;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
@@ -347,7 +366,7 @@ function App() {
                   <ImagePlus size={25} strokeWidth={1.5} />
                 </span>
                 <strong>点击上传，或拖入照片</strong>
-                <span>JPG / PNG / WebP · 最大 20 MB</span>
+                <span>JPG / PNG / WebP · 最大 50 MB</span>
               </button>
               <input
                 ref={uploadRef}
@@ -438,9 +457,20 @@ function App() {
               <div className="dpi-control">
                 <label htmlFor="dpi">输出分辨率</label>
                 <div className="select-wrap">
-                  <select id="dpi" value={dpi} onChange={(e) => setDpi(Number(e.target.value))}>
+                  <select
+                    id="dpi"
+                    value={resolution}
+                    onChange={(e) =>
+                      setResolution(
+                        e.target.value === 'original'
+                          ? 'original'
+                          : (Number(e.target.value) as ExportResolution),
+                      )
+                    }
+                  >
+                    <option value="original">原图画质 · 推荐</option>
                     <option value={150}>150 DPI</option>
-                    <option value={300}>300 DPI · 推荐</option>
+                    <option value={300}>300 DPI</option>
                     <option value={600}>600 DPI</option>
                   </select>
                   <ChevronDown size={13} />
@@ -619,7 +649,7 @@ function App() {
                 <LockKeyhole size={13} /> 照片不上传至服务器
               </span>
               <span>
-                {pixels.width} × {pixels.height} px <i /> {dpi} DPI
+                {pixels.width} × {pixels.height} px <i /> {output.dpi} DPI
               </span>
             </div>
           </section>
@@ -686,7 +716,7 @@ function App() {
                   {validSize ? `${widthMm} × ${heightMm}` : '—'} <small>mm</small>
                 </strong>
                 <p>
-                  {pixels.width} × {pixels.height} px / {dpi} DPI
+                  {pixels.width} × {pixels.height} px / {output.dpi} DPI
                 </p>
               </div>
               <div className="format-control" role="group" aria-label="导出格式">
@@ -727,7 +757,11 @@ function App() {
               >
                 <Grid2X2 size={16} /> 导出六寸排版 <span>JPG</span>
               </button>
-              <p className="export-note">高清导出 · 无水印</p>
+              <p className="export-note">
+                {resolution === 'original'
+                  ? '保留原图有效像素 · PNG 无损'
+                  : '指定打印精度 · 无水印'}
+              </p>
             </div>
             <div className="help-note">
               <span>

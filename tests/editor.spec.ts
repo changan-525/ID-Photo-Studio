@@ -1,20 +1,23 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
-async function fixture(page: Page, transparent = true) {
-  const data = await page.evaluate((alpha) => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 300;
-    canvas.height = 420;
-    const context = canvas.getContext('2d')!;
-    if (!alpha) {
-      context.fillStyle = '#ddd';
-      context.fillRect(0, 0, 300, 420);
-    }
-    context.fillStyle = '#805040';
-    context.fillRect(80, 70, 140, 350);
-    return canvas.toDataURL('image/png').split(',')[1];
-  }, transparent);
+async function fixture(page: Page, transparent = true, width = 300, height = 420) {
+  const data = await page.evaluate(
+    ({ alpha, width, height }) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext('2d')!;
+      if (!alpha) {
+        context.fillStyle = '#ddd';
+        context.fillRect(0, 0, width, height);
+      }
+      context.fillStyle = '#805040';
+      context.fillRect(width * 0.27, height * 0.17, width * 0.46, height * 0.83);
+      return canvas.toDataURL('image/png').split(',')[1];
+    },
+    { alpha: transparent, width, height },
+  );
   return { name: 'portrait.png', mimeType: 'image/png', buffer: Buffer.from(data, 'base64') };
 }
 
@@ -29,6 +32,15 @@ test('edits a transparent portrait and exports exact size, colour, DPI and print
   await page.goto('/');
   await page.getByLabel('选择照片文件').setInputFiles(await fixture(page));
   await expect(page.locator('.toast')).toHaveText('已识别透明背景，可直接换底与裁切');
+  await expect(page.getByLabel('输出分辨率')).toHaveValue('original');
+  await expect(page.locator('.output-summary')).toContainText('300 × 420 px');
+  const originalDownloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: '下载证件照', exact: true }).click();
+  const originalDownload = await originalDownloadPromise;
+  const originalBytes = await readFile((await originalDownload.path())!);
+  expect(originalDownload.suggestedFilename()).toBe('id-photo-25x35mm-original-305dpi.png');
+  expect([originalBytes.readUInt32BE(16), originalBytes.readUInt32BE(20)]).toEqual([300, 420]);
+  await page.getByLabel('输出分辨率').selectOption('300');
   await page.getByRole('button', { name: '标准红背景', exact: true }).click();
   const canvas = page.locator('.photo-frame canvas');
   expect(
@@ -73,9 +85,16 @@ test('edits a transparent portrait and exports exact size, colour, DPI and print
   expect(externalRequests).toEqual([]);
 });
 
+test('keeps uploads above the former 2400px limit at source resolution', async ({ page }) => {
+  await page.goto('/');
+  await page.getByLabel('选择照片文件').setInputFiles(await fixture(page, true, 2500, 3500));
+  await expect(page.locator('.output-summary')).toContainText('2500 × 3500 px');
+  await expect(page.getByLabel('输出分辨率')).toHaveValue('original');
+});
+
 test('custom dimensions validate, resizing and keyboard composition work', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('.photo-frame canvas')).toHaveAttribute('width', '295');
+  await expect(page.locator('.photo-frame canvas')).toHaveAttribute('width', '600');
   await page.getByRole('button', { name: '自定义尺寸 mm' }).click();
   await page.getByLabel('宽度', { exact: true }).fill('0');
   await expect(page.getByRole('button', { name: '下载证件照', exact: true })).toBeDisabled();

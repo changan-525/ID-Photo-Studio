@@ -11,7 +11,7 @@ A local, privacy-first ID photo editor built with React, TypeScript, MediaPipe a
 - On-device portrait background removal. White, blue, red, gray, custom and transparent backgrounds.
 - Six common size presets and custom 10–100 mm dimensions; 150, 300 or 600 DPI.
 - Drag, zoom, rotation correction, composition guides and original-image comparison.
-- PNG/JPEG downloads with actual pixel resizing and embedded PNG pHYs / JPEG JFIF density metadata.
+- Source-quality output keeps all effective crop pixels by default. PNG is lossless, JPEG uses maximum browser quality; fixed 150/300/600 DPI remains available.
 - 6 × 4 inch print sheets with margins, spacing, cutting guides and orientation selection.
 - No account, API key, photo upload, analytics or server-side inference.
 - Responsive Chinese interface with keyboard controls.
@@ -47,7 +47,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-Four tests run by default. The fifth, actual portrait segmentation test runs when `PORTRAIT_FIXTURE` points to your own local portrait. Set `PLAYWRIGHT_CHANNEL=chrome` to use an installed Chrome instead of Playwright's browser. Tests cover exports, metadata, dimensions, background pixels, print sheets, error recovery, mobile overflow and keyboard editing. The optional model test also verifies that runtime requests remain same-origin.
+Five tests run by default. The sixth, actual portrait segmentation test runs when `PORTRAIT_FIXTURE` points to your own local portrait. Set `PLAYWRIGHT_CHANNEL=chrome` to use an installed Chrome instead of Playwright's browser. Tests cover source-pixel retention, exports, metadata, dimensions, background pixels, print sheets, error recovery, mobile overflow and keyboard editing. The optional model test also verifies that runtime requests remain same-origin.
 
 ## GitHub and deployment
 
@@ -61,7 +61,9 @@ For GitHub Pages, select **Settings → Pages → Source → GitHub Actions**, t
 
 The one-inch preset is 25 × 35 mm: `round(mm / 25.4 × DPI)` gives 295 × 413 px at 300 DPI. Preset names and measurements are shortcuts, not certification of any issuing authority's requirements. Print sheets use 152.4 × 101.6 mm paper, 3 mm margins and 2 mm gaps. Print at actual size / 100%, with fit-to-page disabled.
 
-Inputs: JPG, PNG or WebP, up to 20 MB and 40 megapixels; HEIC is unsupported. Images are decoded with browser EXIF orientation support and resized to a maximum working edge of 2400 px. PNG preserves transparency; JPEG flattens it onto white. Processing happens in the main thread and can briefly block low-powered devices; cancel discards pending results but cannot stop a synchronous inference already running.
+Inputs: JPG, PNG or WebP, up to 50 MB and 40 megapixels; HEIC is unsupported. Images are decoded with browser EXIF orientation support and retain their source pixel dimensions. Source-quality mode chooses the largest target-aspect canvas that does not upscale effective source pixels and writes the resulting DPI. PNG is lossless and preserves transparency; JPEG is always lossy even at the maximum quality setting and flattens transparency onto white. Six-inch sheets are capped at 600 DPI to avoid excessive print files. Processing happens in the main thread and can briefly block low-powered devices; cancel discards pending results but cannot stop a synchronous inference already running.
+
+Changing a background or crop necessarily re-encodes the image, so the output cannot be byte-for-byte identical to the upload. “Lossless” means the PNG encoder introduces no additional lossy compression; segmentation edge quality is still limited by the lightweight mask model.
 
 This is lightweight segmentation, not professional alpha matting. Hair, accessories and complex backgrounds may need manual touch-up in another editor. It does not identify people, validate official ID rules, automatically enforce head proportions, or compress to a target file size. Chrome has been tested; other browsers need Canvas, WebAssembly and `createImageBitmap` support.
 

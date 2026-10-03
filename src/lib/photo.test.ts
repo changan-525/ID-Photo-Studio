@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getPixelSize, getPrintLayout, mmToPx, PRESETS } from './photo';
+import { getPixelSize, getPrintLayout, getSourceQualitySize, mmToPx, PRESETS } from './photo';
 import { crc32, embedDpi } from './dpi';
 
 describe('physical dimensions', () => {
@@ -18,6 +18,40 @@ describe('physical dimensions', () => {
         expect(Math.abs((size.width / dpi) * 25.4 - item.widthMm)).toBeLessThan(25.4 / dpi);
         expect(Math.abs((size.height / dpi) * 25.4 - item.heightMm)).toBeLessThan(25.4 / dpi);
       }
+  });
+});
+
+describe('source-quality output', () => {
+  it('uses every effective source pixel without enlarging a matching portrait', () => {
+    expect(getSourceQualitySize(4000, 5600, 25, 35)).toEqual({
+      width: 4000,
+      height: 5600,
+      dpi: 4064,
+    });
+  });
+
+  it('crops only the excess dimension for a different target aspect', () => {
+    expect(getSourceQualitySize(6000, 4000, 25, 35)).toEqual({
+      width: 2857,
+      height: 4000,
+      dpi: 2903,
+    });
+  });
+
+  it('retains native sampling density while zooming and caps browser memory', () => {
+    expect(getSourceQualitySize(3000, 4200, 25, 35, 2)).toEqual({
+      width: 1500,
+      height: 2100,
+      dpi: 1524,
+    });
+    const large = getSourceQualitySize(6000, 6000, 25, 35, 0.5);
+    expect(large.width * large.height).toBeLessThanOrEqual(40_000_000);
+    expect(large.width / large.height).toBeCloseTo(25 / 35, 3);
+  });
+
+  it('rejects invalid source-quality inputs', () => {
+    expect(() => getSourceQualitySize(0, 100, 25, 35)).toThrow();
+    expect(() => getSourceQualitySize(100, 100, 25, 35, 0)).toThrow();
   });
 });
 

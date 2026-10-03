@@ -9,6 +9,8 @@ export const PRESETS = [
   { id: 'square', name: '方形照', widthMm: 51, heightMm: 51 },
 ];
 export type Transform = { zoom: number; offsetX: number; offsetY: number; rotation: number };
+export type ExportResolution = 150 | 300 | 600 | 'original';
+const MAX_CANVAS_PIXELS = 40_000_000;
 export function mmToPx(mm: number, dpi: number) {
   return Math.round((mm * dpi) / 25.4);
 }
@@ -16,6 +18,36 @@ export function getPixelSize(widthMm: number, heightMm: number, dpi: number) {
   if (![widthMm, heightMm, dpi].every((v) => Number.isFinite(v) && v > 0))
     throw new Error('尺寸与 DPI 必须为正数');
   return { width: mmToPx(widthMm, dpi), height: mmToPx(heightMm, dpi) };
+}
+
+/** Largest target-aspect canvas that does not interpolate source pixels upward. */
+export function getSourceQualitySize(
+  sourceWidth: number,
+  sourceHeight: number,
+  widthMm: number,
+  heightMm: number,
+  zoom = 1,
+) {
+  if (
+    ![sourceWidth, sourceHeight, widthMm, heightMm, zoom].every((v) => Number.isFinite(v) && v > 0)
+  )
+    throw new Error('原图尺寸、输出尺寸与缩放必须为正数');
+  const aspect = widthMm / heightMm;
+  let width: number;
+  let height: number;
+  if (sourceWidth / sourceHeight >= aspect) {
+    height = Math.max(1, Math.floor(sourceHeight / zoom));
+    width = Math.max(1, Math.floor(height * aspect));
+  } else {
+    width = Math.max(1, Math.floor(sourceWidth / zoom));
+    height = Math.max(1, Math.floor(width / aspect));
+  }
+  if (width * height > MAX_CANVAS_PIXELS) {
+    const scale = Math.sqrt(MAX_CANVAS_PIXELS / (width * height));
+    width = Math.max(1, Math.floor(width * scale));
+    height = Math.max(1, Math.floor(width / aspect));
+  }
+  return { width, height, dpi: Math.max(1, Math.round((width * 25.4) / widthMm)) };
 }
 function makeCanvas(width: number, height: number) {
   const canvas = document.createElement('canvas');
@@ -29,7 +61,8 @@ function makeCanvas(width: number, height: number) {
 export async function decodePhoto(file: File): Promise<HTMLCanvasElement> {
   if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type))
     throw new Error('请选择 JPG、PNG 或 WebP 图片；HEIC 请先转换格式。');
-  if (file.size > 20 * 1024 * 1024) throw new Error('照片超过 20 MB，请压缩后重试。');
+  if (file.size > 50 * 1024 * 1024)
+    throw new Error('照片超过 50 MB，请在不降低像素尺寸的前提下优化文件后重试。');
   if (!file.size) throw new Error('这张照片是空文件，请重新选择。');
   let image: ImageBitmap;
   try {
@@ -40,11 +73,7 @@ export async function decodePhoto(file: File): Promise<HTMLCanvasElement> {
   try {
     if (image.width * image.height > 40_000_000)
       throw new Error('图片超过 4000 万像素，请先缩小后重试。');
-    const ratio = Math.min(1, 2400 / Math.max(image.width, image.height));
-    const { canvas, ctx } = makeCanvas(
-      Math.max(1, Math.round(image.width * ratio)),
-      Math.max(1, Math.round(image.height * ratio)),
-    );
+    const { canvas, ctx } = makeCanvas(image.width, image.height);
     ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
     return canvas;
   } finally {
@@ -57,7 +86,7 @@ export function renderPhoto(
   options: { width: number; height: number; background: string; transform: Transform },
 ) {
   const { width, height, background, transform } = options;
-  if (width < 1 || height < 1 || width * height > 25_000_000)
+  if (width < 1 || height < 1 || width * height > MAX_CANVAS_PIXELS)
     throw new Error('输出尺寸超出支持范围');
   const { canvas, ctx } = makeCanvas(width, height);
   if (background !== 'transparent') {
@@ -150,7 +179,7 @@ export async function exportCanvas(source: HTMLCanvasElement, format: 'png' | 'j
     canvas.toBlob(
       (result) => (result ? resolve(result) : reject(new Error('导出图片失败'))),
       mime,
-      0.95,
+      1,
     ),
   );
   const bytes = embedDpi(new Uint8Array(await blob.arrayBuffer()), format, dpi);
