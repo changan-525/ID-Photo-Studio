@@ -8,7 +8,7 @@
 
 React · TypeScript · MediaPipe · Canvas
 
-[English](README.en.md) · [快速开始](#快速开始) · [部署到-github-pages](#部署到-github-pages) · [贡献指南](CONTRIBUTING.md)
+[English](README.en.md) · [下载应用](https://github.com/changan-525/ID-Photo-Studio/releases/latest) · [快速开始](#快速开始) · [部署到-github-pages](#部署到-github-pages) · [贡献指南](CONTRIBUTING.md)
 
 </div>
 
@@ -27,6 +27,14 @@ React · TypeScript · MediaPipe · Canvas
 > 页面初始人物是项目原创的**演示插画**，用于体验尺寸、颜色和导出。上传普通照片后才会运行人像分割；已有明显透明背景的图片会直接进入编辑。
 
 ## 快速开始
+
+不想配置开发环境时，可在 [最新发行版](https://github.com/changan-525/ID-Photo-Studio/releases/latest) 下载：
+
+- Windows 10/11 x64 便携版：解压 ZIP 后直接双击 EXE，无需安装；
+- Android 7.0 及以上：下载 APK 后按系统提示安装，导出时可通过系统面板保存或分享照片；
+- 完整源码 ZIP。
+
+三个文件均附带 SHA-256 校验值。Android APK 使用自动构建的调试签名，后续版本若提示签名不一致，需要先卸载旧版再安装。
 
 需要 **Node.js 22.12+（建议 24 LTS）** 和 npm。
 
@@ -136,6 +144,8 @@ public/
 scripts/setup-assets.mjs  模型校验和本地资源准备
 tests/editor.spec.ts      浏览器测试
 .github/workflows/        CI 与手动 Pages 发布
+electron/                 Windows 桌面端安全启动入口
+android/                  Capacitor Android 原生工程
 ```
 
 ## 实现与限制

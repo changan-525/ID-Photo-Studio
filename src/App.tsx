@@ -28,6 +28,7 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 import {
   PRESETS,
   createPrintSheet,
@@ -58,6 +59,15 @@ function hasTransparency(canvas: HTMLCanvasElement) {
   let clear = 0;
   for (let i = 3; i < data.length; i += 4) if (data[i] < 128) clear++;
   return clear > 40;
+}
+
+function blobToBase64(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('无法读取导出的照片，请重试。'));
+    reader.onload = () => resolve(String(reader.result).split(',', 2)[1] ?? '');
+    reader.readAsDataURL(blob);
+  });
 }
 
 function App() {
@@ -234,18 +244,38 @@ function App() {
         sheet ? 'jpeg' : format,
         sheet ? sheetDpi : exportDpi,
       );
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
       const qualityLabel =
         resolution === 'original' && !sheet
           ? `original-${exportDpi}dpi`
           : `${sheet ? sheetDpi : exportDpi}dpi`;
-      anchor.download = `id-photo-${widthMm}x${heightMm}mm-${qualityLabel}${sheet ? '-sheet' : ''}.${sheet || format === 'jpeg' ? 'jpg' : 'png'}`;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+      const exportName = `id-photo-${widthMm}x${heightMm}mm-${qualityLabel}${sheet ? '-sheet' : ''}.${sheet || format === 'jpeg' ? 'jpg' : 'png'}`;
+
+      if (Capacitor.isNativePlatform()) {
+        const [{ Directory, Filesystem }, { Share }] = await Promise.all([
+          import('@capacitor/filesystem'),
+          import('@capacitor/share'),
+        ]);
+        const saved = await Filesystem.writeFile({
+          path: exportName,
+          data: await blobToBase64(blob),
+          directory: Directory.Cache,
+        });
+        await Share.share({
+          title: '保存证件照',
+          text: '请选择保存位置或分享应用',
+          files: [saved.uri],
+          dialogTitle: '保存或分享证件照',
+        });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = exportName;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+      }
       setNotice(
         sheet
           ? `已导出六寸排版，共 ${count} 张照片`

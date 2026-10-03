@@ -1,5 +1,6 @@
 node_modules/
 dist/
+release/
 public/wasm/
 public/licenses/
 public/THIRD_PARTY_NOTICES.md
@@ -13,3 +14,7 @@ Thumbs.db
 .env.*
 !.env.example
 *.log
+android/.gradle/
+android/local.properties
+android/app/build/
+android/build/

@@ -5,5 +5,7 @@ public/licenses
 public/THIRD_PARTY_NOTICES.md
 test-results
 playwright-report
+release
+android/app/src/main/assets
 package-lock.json
 *.tsbuildinfo

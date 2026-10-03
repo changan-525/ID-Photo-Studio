@@ -1,0 +1,94 @@
+name: Build and publish release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Windows portable app
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run desktop:build
+      - name: Package portable executable
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release-assets | Out-Null
+          $exe = Get-ChildItem release/portable/ID-Photo-Studio-Windows-Portable-*.exe | Select-Object -First 1
+          if (-not $exe) { throw 'Portable executable was not generated.' }
+          Compress-Archive -LiteralPath $exe.FullName -DestinationPath "release-assets/ID-Photo-Studio-Windows-Portable-${{ github.ref_name }}.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-portable
+          path: release-assets/*.zip
+          if-no-files-found: error
+
+  android:
+    name: Android app
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - run: npm ci
+      - run: npm run android:sync
+      - name: Build installable APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+      - name: Collect APK
+        run: |
+          mkdir -p release-assets
+          cp android/app/build/outputs/apk/debug/app-debug.apk "release-assets/ID-Photo-Studio-Android-${{ github.ref_name }}.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-app
+          path: release-assets/*.apk
+          if-no-files-found: error
+
+  publish:
+    name: GitHub Release
+    needs: [windows, android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+      - name: Package source and checksums
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          git archive --format=zip --prefix="ID-Photo-Studio-${TAG}/" --output="release-assets/ID-Photo-Studio-Source-${TAG}.zip" "$GITHUB_SHA"
+          cd release-assets
+          sha256sum *.apk *.zip > SHA256SUMS.txt
+      - name: Publish release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" release-assets/* \
+            --verify-tag \
+            --title "ID Photo Studio ${TAG}" \
+            --notes-file RELEASE_NOTES.md

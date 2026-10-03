@@ -2,7 +2,7 @@
 
 A local, privacy-first ID photo editor built with React, TypeScript, MediaPipe and Canvas.
 
-[中文文档](README.md) · [Contributing](CONTRIBUTING.md) · [License](LICENSE)
+[中文文档](README.md) · [Download apps](https://github.com/changan-525/ID-Photo-Studio/releases/latest) · [Contributing](CONTRIBUTING.md) · [License](LICENSE)
 
 ![Desktop preview with an original demo illustration](docs/preview.png)
 
@@ -19,6 +19,8 @@ A local, privacy-first ID photo editor built with React, TypeScript, MediaPipe a
 The initial portrait is an original **demo illustration**, not a demonstration of model quality. Uploading a normal photo invokes segmentation; images with an existing transparent background can skip it.
 
 ## Run locally
+
+Prebuilt downloads are available from the [latest release](https://github.com/changan-525/ID-Photo-Studio/releases/latest): a portable Windows 10/11 x64 ZIP, an installable Android 7.0+ APK, and a source ZIP. The Android APK uses an automated debug signature; uninstall the previous build first if a later release reports a signature mismatch.
 
 Node.js 22.12+ required; Node 24 LTS suggested.
 
